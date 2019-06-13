@@ -7,6 +7,7 @@ from ssm.preprocessing import interpolate_data
 from ssm.primitives import lds_log_probability, lds_sample, lds_mean
 from ssm.util import ensure_variational_args_are_lists
 
+
 class VariationalPosterior(object):
     """
     Base class for a variational posterior distribution.

@@ -19,6 +19,7 @@ import ssm.emissions as emssn
 
 __all__ = ['HMM', 'HSMM']
 
+
 class HMM(object):
     """
     Base class for hidden Markov models.
@@ -115,7 +116,7 @@ class HMM(object):
         if not isinstance(observations, obs.Observations):
             raise TypeError("'observations' must be a subclass of"
                             " ssm.observations.Observations")
-        
+
         self.K, self.D, self.M = K, D, M
         self.init_state_distn = init_state_distn
         self.transitions = transitions

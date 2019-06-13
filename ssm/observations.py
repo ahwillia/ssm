@@ -559,7 +559,67 @@ class PoissonObservations(Observations):
         x = np.concatenate(datas)
         weights = np.concatenate([Ez for Ez, _, _ in expectations])
         for k in range(self.K):
-            self.log_lambdas[k] = np.log(np.average(x, axis=0, weights=weights[:,k]) + 1e-16)
+            self.log_lambdas[k] = np.log(np.average(x, axis=0, weights=weights[:, k]) + 1e-16)
+
+    def smooth(self, expectations, data, input, tag):
+        """
+        Compute the mean observation under the posterior distribution
+        of latent discrete states.
+        """
+        return expectations.dot(np.exp(self.log_lambdas))
+
+
+class PoissonGLMObservations(Observations):
+
+    def __init__(self, K, D, M=0):
+        assert M > 0, "PoissonGLMObservations requires inputs."
+        super(PoissonGLMObservations, self).__init__(K, D, M)
+
+        # Regression parameters linking M-dimensional inputs to
+        # D-dimensional observations in each HMM state.
+        self.glm_coeffs = npr.randn(K, D, M)
+
+    @property
+    def params(self):
+        return self.glm_coeffs
+
+    @params.setter
+    def params(self, value):
+        self.glm_coeffs = value
+
+    def permute(self, perm):
+        """Permute HMM state indices."""
+        self.log_lambdas = self.log_lambdas[perm]
+
+    @ensure_args_are_lists
+    def initialize(self, datas, inputs=None, masks=None, tags=None):
+        # TODO: consider smarter initialization.
+        pass
+
+    def log_likelihoods(self, data, inp, mask, tag):
+        # If mask is None, set to fully observed.
+        mask = np.ones_like(data, dtype=bool) if mask is None else mask
+
+        # (n_obs, n_in) -> (n_obs, n_states, n_out)
+        self.log_lams = np.dot(inp[:, None, :], self.glm_coeffs)
+
+        # Compute log-likelihoods of across all possible HMM states.
+        # Broadcasts shape of data as:
+        #     (1, n_out, n_obs) -> (n_states, n_out, n_obs)
+        return stats.poisson_logpdf(
+            data[:, None, :],
+            np.exp(self.log_lams),
+            mask=mask[:, None, :])
+
+    def sample_x(self, z, xhist, input=None, tag=None, with_noise=True):
+        lambdas = np.exp(self.log_lambdas)
+        return npr.poisson(lambdas[z])
+
+    def m_step(self, expectations, datas, inputs, masks, tags, **kwargs):
+        x = np.concatenate(datas)
+        weights = np.concatenate([Ez for Ez, _, _ in expectations])
+        for k in range(self.K):
+            self.log_lambdas[k] = np.log(np.average(x, axis=0, weights=weights[:, k]) + 1e-16)
 
     def smooth(self, expectations, data, input, tag):
         """
