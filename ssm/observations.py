@@ -589,7 +589,7 @@ class PoissonGLMObservations(Observations):
 
     def permute(self, perm):
         """Permute HMM state indices."""
-        self.log_lambdas = self.log_lambdas[perm]
+        self.glm_coeffs = self.glm_coeffs[perm]
 
     @ensure_args_are_lists
     def initialize(self, datas, inputs=None, masks=None, tags=None):
@@ -597,36 +597,52 @@ class PoissonGLMObservations(Observations):
         pass
 
     def log_likelihoods(self, data, inp, mask, tag):
+        """
+        Compute Log-likelihood of observations.
+
+        Parameters
+        ----------
+        data : ndarray
+            Has shape (n_obs, n_out).
+        inp : ndarray
+            Has shape (n_obs, n_in).
+        mask : ndarray
+            Has shape (n_obs, n_out).
+        tag : ???
+
+        Returns
+        -------
+        log_likes : ndarray
+            Has shape (n_states, n_obs, n_out).
+        """
+
         # If mask is None, set to fully observed.
         mask = np.ones_like(data, dtype=bool) if mask is None else mask
 
-        # (n_obs, n_in) -> (n_obs, n_states, n_out)
-        self.log_lams = np.dot(inp[:, None, :], self.glm_coeffs)
+        # (1, n_states, n_out, n_in),
+        # (n_obs, 1, n_in), ->
+        # (n_obs, n_states, n_out)
+        log_lams = np.matmul(
+            self.glm_coeffs[None, :, :, :], inp[:, None, :, None])
 
         # Compute log-likelihoods of across all possible HMM states.
-        # Broadcasts shape of data as:
-        #     (1, n_out, n_obs) -> (n_states, n_out, n_obs)
         return stats.poisson_logpdf(
             data[:, None, :],
-            np.exp(self.log_lams),
+            np.exp(log_lams[:, :, :, 0]),
             mask=mask[:, None, :])
 
     def sample_x(self, z, xhist, input=None, tag=None, with_noise=True):
-        lambdas = np.exp(self.log_lambdas)
-        return npr.poisson(lambdas[z])
-
-    def m_step(self, expectations, datas, inputs, masks, tags, **kwargs):
-        x = np.concatenate(datas)
-        weights = np.concatenate([Ez for Ez, _, _ in expectations])
-        for k in range(self.K):
-            self.log_lambdas[k] = np.log(np.average(x, axis=0, weights=weights[:, k]) + 1e-16)
+        raise NotImplementedError
+        # lambdas = np.exp(self.log_lambdas)
+        # return npr.poisson(lambdas[z])
 
     def smooth(self, expectations, data, input, tag):
         """
         Compute the mean observation under the posterior distribution
         of latent discrete states.
         """
-        return expectations.dot(np.exp(self.log_lambdas))
+        raise NotImplementedError
+        # return expectations.dot(np.exp(self.log_lambdas))
 
 
 class CategoricalObservations(Observations):
